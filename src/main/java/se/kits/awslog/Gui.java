@@ -17,13 +17,13 @@ public class Gui {
             JFrame frame = new JFrame("Keep it Streaming");
 
             frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-            frame.setSize(800, 400);
+            frame.setSize(1200, 800);
             frame.setLayout(new GridBagLayout());
 
             DefaultListModel<String> logStreamsModel = new DefaultListModel<>();
             logStreamsModel.addElement("Select log group");
-            DefaultListModel<String> logModel = new DefaultListModel<>();
-            logModel.addElement("Select log stream");
+            DefaultListModel<EventRow> logModel = new DefaultListModel<>();
+            logModel.addElement(new EventRow("Select log stream", 1));
 
             JPanel groupPanel = createGroupPanel(logStreamsModel);
             JPanel streamPanel = createStreamPanel(logStreamsModel, logModel);
@@ -109,7 +109,7 @@ public class Gui {
         return groupPanel;
     }
 
-    private static JPanel createStreamPanel(DefaultListModel<String> logStreamsModel, DefaultListModel<String> logModel) {
+    private static JPanel createStreamPanel(DefaultListModel<String> logStreamsModel, DefaultListModel<EventRow> logModel) {
         JPanel streamsArea = new JPanel();
         JList<String> logStreamsList = new JList<>(logStreamsModel);
         JScrollPane mainScrollPane = new JScrollPane(logStreamsList);
@@ -126,16 +126,24 @@ public class Gui {
                     .build()) {
                 List<KitsLogEvent> logStreams = CloudWatch.getLogEvents(App.region, profileCredentialsProvider, key);
                 for (KitsLogEvent stream : logStreams) {
-                    logModel.addElement(stream.content() + " " + stream.eventTime());
+                    int colorIndex = 0;
+                    String message = stream.content() + " " + stream.eventTime();
+                    if (message.contains("ERROR")) {
+                        colorIndex = 1;
+                    }
+                    if (message.contains("INFO")) {
+                        colorIndex = 2;
+                    }
+                    logModel.addElement(new EventRow(message, colorIndex));
                 }
             }
         });
         return streamsArea;
     }
 
-    private static JPanel createLogPanel(DefaultListModel<String> logModel) {
+    private static JPanel createLogPanel(DefaultListModel<EventRow> logModel) {
         JPanel logPanel = new JPanel();
-        JList<String> logs = new JList<>(logModel);
+        JList<EventRow> logs = new JList<>(logModel);
         logs.setCellRenderer(new LogCellRenderer());
         JScrollPane logScrollPane = new JScrollPane(logs);
         logPanel.add(logScrollPane);
