@@ -33,7 +33,7 @@ public class App
         try (ProfileCredentialsProvider profileCredentialsProvider = ProfileCredentialsProvider.builder()
                 .profileName(profileName)
                 .build()) {
-            CloudWatch.getLogs(region, profileCredentialsProvider, "Konpro-Audit");
+            CloudWatch.getLogGroups(region, profileCredentialsProvider, "Konpro-Audit");
         } catch (software.amazon.awssdk.core.exception.SdkClientException e) {
             e.printStackTrace();
             System.exit(-1);
