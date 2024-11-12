@@ -9,6 +9,7 @@ import java.util.List;
 public class Gui {
 
     private static List<KitsLogGroup> kitsLogGroups;
+    private static List<KitsLogStream> kitsLogStreams;
     private static String logGroupsPattern = "";
 
     public static void startGui() {
@@ -21,13 +22,19 @@ public class Gui {
 
             DefaultListModel<String> logStreamsModel = new DefaultListModel<>();
             logStreamsModel.addElement("Select log group");
-            JPanel mainArea = createStreamPanel(logStreamsModel);
+            DefaultListModel<String> logModel = new DefaultListModel<>();
+            logModel.addElement("Select log stream");
 
-            JPanel sideBar = createGroupPanel(logStreamsModel);
+            JPanel groupPanel = createGroupPanel(logStreamsModel);
+            JPanel streamPanel = createStreamPanel(logStreamsModel, logModel);
+            JPanel logPanel = createLogPanel(logModel);
 
-            JSplitPane splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, sideBar, mainArea);
-            splitPane.setOneTouchExpandable(true);
-            splitPane.setDividerLocation(200);
+            JSplitPane topSplitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, groupPanel, streamPanel);
+            topSplitPane.setOneTouchExpandable(true);
+            topSplitPane.setDividerLocation(200);
+            JSplitPane mainSplitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, topSplitPane, logPanel);
+            topSplitPane.setOneTouchExpandable(true);
+            topSplitPane.setDividerLocation(200);
 
             JPanel buttonPanel = new JPanel();
             buttonPanel.setBackground(Color.BLUE);
@@ -48,7 +55,7 @@ public class Gui {
             gbc.weightx = 1.0;
             gbc.weighty = 1.0;
             gbc.fill = GridBagConstraints.BOTH;
-            frame.add(splitPane, gbc);
+            frame.add(mainSplitPane, gbc);
 
             // Add the button panel at the bottom
             gbc.gridx = 0;
@@ -91,9 +98,9 @@ public class Gui {
             try (ProfileCredentialsProvider profileCredentialsProvider = ProfileCredentialsProvider.builder()
                     .profileName(App.profileName)
                     .build()) {
-                List<KitsLogStream> logStreams = CloudWatch.getLogStreams(App.region, profileCredentialsProvider, key);
-                for (KitsLogStream stream : logStreams) {
-                    logStreamsModel.addElement(stream.name() + " " + stream.lastEventTime());
+                kitsLogStreams = CloudWatch.getLogStreams(App.region, profileCredentialsProvider, key);
+                for (KitsLogStream stream : kitsLogStreams) {
+                    logStreamsModel.addElement(stream.logStreamName() + " " + stream.lastEventTime());
                 }
             }
         });
@@ -102,15 +109,40 @@ public class Gui {
         return groupPanel;
     }
 
-    private static JPanel createStreamPanel(DefaultListModel<String> logStreamsModel) {
+    private static JPanel createStreamPanel(DefaultListModel<String> logStreamsModel, DefaultListModel<String> logModel) {
         JPanel streamsArea = new JPanel();
-        JList<String> logStreams = new JList<>(logStreamsModel);
-        JScrollPane mainScrollPane = new JScrollPane(logStreams);
+        JList<String> logStreamsList = new JList<>(logStreamsModel);
+        JScrollPane mainScrollPane = new JScrollPane(logStreamsList);
         streamsArea.add(mainScrollPane);
         streamsArea.setLayout(new BoxLayout(streamsArea, BoxLayout.Y_AXIS));
         streamsArea.setBackground(Color.LIGHT_GRAY);
-        logStreams.setAlignmentX(Component.CENTER_ALIGNMENT);
-        logStreams.setAlignmentY(Component.CENTER_ALIGNMENT);
+        logStreamsList.setAlignmentX(Component.CENTER_ALIGNMENT);
+        logStreamsList.setAlignmentY(Component.CENTER_ALIGNMENT);
+        logStreamsList.addListSelectionListener(e -> {
+            KitsLogStream key = kitsLogStreams.get(e.getFirstIndex());
+            logModel.clear();
+            try (ProfileCredentialsProvider profileCredentialsProvider = ProfileCredentialsProvider.builder()
+                    .profileName(App.profileName)
+                    .build()) {
+                List<KitsLogEvent> logStreams = CloudWatch.getLogEvents(App.region, profileCredentialsProvider, key);
+                for (KitsLogEvent stream : logStreams) {
+                    logModel.addElement(stream.content() + " " + stream.eventTime());
+                }
+            }
+        });
         return streamsArea;
+    }
+
+    private static JPanel createLogPanel(DefaultListModel<String> logModel) {
+        JPanel logPanel = new JPanel();
+        JList<String> logs = new JList<>(logModel);
+        logs.setCellRenderer(new LogCellRenderer());
+        JScrollPane logScrollPane = new JScrollPane(logs);
+        logPanel.add(logScrollPane);
+        logPanel.setLayout(new BoxLayout(logPanel, BoxLayout.Y_AXIS));
+        logPanel.setBackground(Color.LIGHT_GRAY);
+        logs.setAlignmentX(Component.CENTER_ALIGNMENT);
+        logs.setAlignmentY(Component.CENTER_ALIGNMENT);
+        return logPanel;
     }
 }

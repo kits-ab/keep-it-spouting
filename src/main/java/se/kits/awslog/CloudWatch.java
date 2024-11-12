@@ -45,14 +45,14 @@ public class CloudWatch {
         return new ArrayList<>();
     }
 
-    public static List<KitsLogStream> getLogStreams(Region region, ProfileCredentialsProvider profileCredentialsProvider, String name) {
+    public static List<KitsLogStream> getLogStreams(Region region, ProfileCredentialsProvider profileCredentialsProvider, String logGroupName) {
         try (CloudWatchLogsClient client = CloudWatchLogsClient.builder()
                 .region(region)
                 .credentialsProvider(profileCredentialsProvider)
                 .build()) {
 
             DescribeLogStreamsRequest request = DescribeLogStreamsRequest.builder()
-                .logGroupName(name)
+                .logGroupName(logGroupName)
                 .descending(true)
                 .limit(10)
                 .build();
@@ -61,10 +61,41 @@ public class CloudWatch {
             for (LogStream logStream : response.logStreams()) {
                 Instant lastEventMillis = Instant.ofEpochMilli(logStream.lastEventTimestamp());
                 LocalDateTime lastEventTime = LocalDateTime.ofInstant(lastEventMillis, ZoneId.systemDefault());
-                kitsLogStreams.add(new KitsLogStream(logStream.logStreamName(), lastEventTime));
+                kitsLogStreams.add(new KitsLogStream(logStream.logStreamName(), logGroupName, lastEventTime));
                 logger.info("Log Stream Name: {} {}", logStream.logStreamName(), App.awsDateFormat.format(lastEventTime));
             }
             return kitsLogStreams;
+        }
+    }
+
+    public static List<KitsLogEvent> getLogEvents(Region region, ProfileCredentialsProvider profileCredentialsProvider, KitsLogStream kitsLogStream) {
+        try (CloudWatchLogsClient client = CloudWatchLogsClient.builder()
+                .region(region)
+                .credentialsProvider(profileCredentialsProvider)
+                .build()) {
+
+            GetLogEventsRequest getLogEventsRequest = GetLogEventsRequest.builder()
+                .logGroupName(kitsLogStream.logGroupName())
+                .logStreamName(kitsLogStream.logStreamName())
+                .startFromHead(true)
+                .limit(100)
+                .build();
+            GetLogEventsResponse response = client.getLogEvents(getLogEventsRequest);
+
+        // Iterate and print log events
+        for (OutputLogEvent logEvent : response.events()) {
+            System.out.println("Timestamp: " + logEvent.timestamp());
+            System.out.println("Message: " + logEvent.message());
+            System.out.println("-----------------------------------");
+        }
+        List<KitsLogEvent> kitsLogEvents = new ArrayList<>();
+            for (OutputLogEvent logEvent : response.events()) {
+                Instant eventMillis = Instant.ofEpochMilli(logEvent.timestamp());
+                LocalDateTime eventTime = LocalDateTime.ofInstant(eventMillis, ZoneId.systemDefault());
+                kitsLogEvents.add(new KitsLogEvent(logEvent.message(), eventTime));
+                logger.info("Log Message: {} {}", logEvent.message(), App.awsDateFormat.format(eventTime));
+            }
+            return kitsLogEvents;
         }
     }
 }
