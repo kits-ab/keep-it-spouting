@@ -14,6 +14,7 @@ import java.util.List;
 
 public class CloudWatch {
     private static final Logger logger = org.slf4j.LoggerFactory.getLogger(CloudWatch.class);
+
     public static List<KitsLogGroup> getLogGroups(Region region, ProfileCredentialsProvider profileCredentialsProvider, String logGroupsPattern) {
         try (CloudWatchLogsClient client = CloudWatchLogsClient.builder()
                 .region(region)
@@ -22,10 +23,10 @@ public class CloudWatch {
             // Create a request to describe log groups
             DescribeLogGroupsRequest request = logGroupsPattern == null || logGroupsPattern.isEmpty() ?
                     DescribeLogGroupsRequest.builder()
-                    .limit(10).build():
+                            .limit(10).build() :
                     DescribeLogGroupsRequest.builder()
-                    .logGroupNamePattern(logGroupsPattern)
-                    .limit(10).build();
+                            .logGroupNamePattern(logGroupsPattern)
+                            .limit(10).build();
 
             // Send the request and receive the response
             DescribeLogGroupsResponse response = client.describeLogGroups(request);
@@ -52,10 +53,10 @@ public class CloudWatch {
                 .build()) {
 
             DescribeLogStreamsRequest request = DescribeLogStreamsRequest.builder()
-                .logGroupName(logGroupName)
-                .descending(true)
-                .limit(10)
-                .build();
+                    .logGroupName(logGroupName)
+                    .descending(true)
+                    .limit(10)
+                    .build();
             DescribeLogStreamsResponse response = client.describeLogStreams(request);
             List<KitsLogStream> kitsLogStreams = new ArrayList<>();
             for (LogStream logStream : response.logStreams()) {
@@ -75,20 +76,22 @@ public class CloudWatch {
                 .build()) {
 
             GetLogEventsRequest getLogEventsRequest = GetLogEventsRequest.builder()
-                .logGroupName(kitsLogStream.logGroupName())
-                .logStreamName(kitsLogStream.logStreamName())
-                .startFromHead(true)
-                .limit(100)
-                .build();
+                    .logGroupName(kitsLogStream.logGroupName())
+                    .logStreamName(kitsLogStream.logStreamName())
+                    .startFromHead(true)
+                    .limit(100)
+                    .build();
             GetLogEventsResponse response = client.getLogEvents(getLogEventsRequest);
 
-        // Iterate and print log events
-        for (OutputLogEvent logEvent : response.events()) {
-            System.out.println("Timestamp: " + logEvent.timestamp());
-            System.out.println("Message: " + logEvent.message());
-            System.out.println("-----------------------------------");
-        }
-        List<KitsLogEvent> kitsLogEvents = new ArrayList<>();
+            // Iterate and print log events
+            if (logger.isInfoEnabled()) {
+                for (OutputLogEvent logEvent : response.events()) {
+                    logger.debug("Timestamp: " + logEvent.timestamp());
+                    logger.debug("Message: " + logEvent.message());
+                    logger.debug("-----------------------------------");
+                }
+            }
+            List<KitsLogEvent> kitsLogEvents = new ArrayList<>();
             for (OutputLogEvent logEvent : response.events()) {
                 Instant eventMillis = Instant.ofEpochMilli(logEvent.timestamp());
                 LocalDateTime eventTime = LocalDateTime.ofInstant(eventMillis, ZoneId.systemDefault());
@@ -96,6 +99,50 @@ public class CloudWatch {
                 logger.info("Log Message: {} {}", logEvent.message(), App.awsDateFormat.format(eventTime));
             }
             return kitsLogEvents;
+        }
+    }
+
+    public static void tailLatest(Region region, ProfileCredentialsProvider profileCredentialsProvider, String logGroup) {
+        try (CloudWatchLogsClient client = CloudWatchLogsClient.builder()
+                .region(region)
+                .credentialsProvider(profileCredentialsProvider)
+                .build()) {
+            String logStream = getLogStreams(region, profileCredentialsProvider, logGroup).getFirst().logStreamName();
+            tail(client, logGroup, logStream);
+        }
+    }
+
+    public static void tail(CloudWatchLogsClient client, String logGroup, String logStream) {
+        String nextToken = null;
+        while (true) {
+            try {
+                FilterLogEventsRequest.Builder requestBuilder = FilterLogEventsRequest.builder()
+                        .logGroupName(logGroup)
+                        .logStreamNames(logStream)
+                        .startTime(Instant.now().minusSeconds(60).toEpochMilli()) // Adjust as necessary
+                        .limit(10);
+
+                if (nextToken != null) {
+                    requestBuilder.nextToken(nextToken);
+                }
+                logger.info("listening to {}", logStream);
+
+                FilterLogEventsResponse response = client.filterLogEvents(requestBuilder.build());
+                for (FilteredLogEvent event : response.events()) {
+                    System.out.println("Timestamp: " + event.timestamp() + " Message: " + event.message());
+                }
+
+                nextToken = response.nextToken();
+
+                // Sleep for some time before fetching the next batch of logs
+                Thread.sleep(5000); // Adjust sleep duration as needed
+
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                System.err.println("Thread was interrupted, Failed to complete operation");
+            } catch (Exception e) {
+                logger.error(e.getMessage());
+            }
         }
     }
 }
