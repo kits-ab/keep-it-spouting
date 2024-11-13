@@ -5,9 +5,10 @@ import java.awt.*;
 
 public class LogCellRenderer extends DefaultListCellRenderer {
     public Color[][] palette = {
-            {Color.LIGHT_GRAY, Color.WHITE},
-            {Color.RED, Color.ORANGE},
-            {Color.BLUE, Color.MAGENTA}
+            {new Color(240,240,240), new Color(200, 200, 200)},
+            {new Color(240, 80,80), new Color(200, 80,80)},
+            {new Color(80, 240,80), new Color(80, 200,80)},
+            {new Color(110,110,250), new Color(110,110,210)},
     };
 
     @Override
@@ -15,7 +16,7 @@ public class LogCellRenderer extends DefaultListCellRenderer {
         Component component = super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
 
         // Alternate the background color
-        if ((index/3) % 2 == 0) {
+        if (index % 2 == 0) {
             if (value instanceof EventRow) {
                 component.setBackground(palette[((EventRow) value).colorIndex()][1]);
             } else {
