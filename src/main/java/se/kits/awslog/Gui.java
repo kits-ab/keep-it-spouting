@@ -8,6 +8,8 @@ import java.util.List;
 
 public class Gui {
 
+    public static String color1 = "ERROR";
+    public static String color2 = "SUCCESS";
     private static List<KitsLogGroup> kitsLogGroups;
     private static List<KitsLogStream> kitsLogStreams;
     private static String logGroupsPattern = "";
@@ -25,7 +27,8 @@ public class Gui {
             DefaultListModel<EventRow> logModel = new DefaultListModel<>();
             logModel.addElement(new EventRow("Select log stream", 1));
 
-            JPanel groupPanel = createGroupPanel(logStreamsModel);
+            DefaultListModel<String> logGroupsModel = new DefaultListModel<>();
+            JPanel groupPanel = createGroupPanel(logGroupsModel, logStreamsModel);
             JPanel streamPanel = createStreamPanel(logStreamsModel, logModel);
             JPanel logPanel = createLogPanel(logModel);
 
@@ -41,9 +44,23 @@ public class Gui {
 
             // Add buttons to the button panel
             buttonPanel.setLayout(new FlowLayout(FlowLayout.CENTER));
-            buttonPanel.add(new JButton("Button 1"));
-            buttonPanel.add(new JButton("Button 2"));
-            buttonPanel.add(new JButton("Button 3"));
+            JTextField inputField = new JTextField("", 20);
+            buttonPanel.add(inputField);
+            JButton setLogGroupPatternButton = new JButton("Set Log Group Pattern");
+            setLogGroupPatternButton.addActionListener(e -> {
+                logGroupsPattern = inputField.getText().trim();
+                logGroupsModel.clear();
+                fetchLogGroups(logGroupsModel);
+            });
+            buttonPanel.add(setLogGroupPatternButton);
+
+            JButton color1Button = new JButton("Color 1 pattern");
+            buttonPanel.add(color1Button);
+            color1Button.addActionListener(e -> color1 = inputField.getText().trim());
+
+            JButton color2Button = new JButton("Color 2 pattern");
+            buttonPanel.add(color2Button);
+            color2Button.addActionListener(e -> color2 = inputField.getText().trim());
 
             GridBagConstraints gbc = new GridBagConstraints();
 
@@ -73,25 +90,17 @@ public class Gui {
         });
     }
 
-    private static JPanel createGroupPanel(DefaultListModel<String> logStreamsModel) {
+    private static JPanel createGroupPanel(DefaultListModel<String> logGroupsModel, DefaultListModel<String> logStreamsModel) {
         JPanel groupPanel = new JPanel();
         groupPanel.setLayout(new BoxLayout(groupPanel, BoxLayout.Y_AXIS));
         groupPanel.setBackground(Color.ORANGE);
         groupPanel.setPreferredSize(new Dimension(200, 0)); // Fixed width
 
 
-        DefaultListModel<String> logGroupsModel = new DefaultListModel<>();
         JList<String> logGroups = new JList<>(logGroupsModel);
         logGroups.setAlignmentX(Component.CENTER_ALIGNMENT);
         logGroups.setAlignmentY(Component.CENTER_ALIGNMENT);
-        try (ProfileCredentialsProvider profileCredentialsProvider = ProfileCredentialsProvider.builder()
-                .profileName(App.profileName)
-                .build()) {
-            kitsLogGroups = CloudWatch.getLogGroups(App.region, profileCredentialsProvider, logGroupsPattern);
-            for (KitsLogGroup log : kitsLogGroups) {
-                logGroupsModel.addElement(log.logGroupName() + " " + log.creationTime());
-            }
-        }
+        fetchLogGroups(logGroupsModel);
         logGroups.addListSelectionListener(e -> {
             String key = kitsLogGroups.get(e.getFirstIndex()).logGroupName();
             logStreamsModel.clear();
@@ -107,6 +116,17 @@ public class Gui {
         JScrollPane sideScrollPane = new JScrollPane(logGroups);
         groupPanel.add(sideScrollPane);
         return groupPanel;
+    }
+
+    private static void fetchLogGroups(DefaultListModel<String> logGroupsModel) {
+        try (ProfileCredentialsProvider profileCredentialsProvider = ProfileCredentialsProvider.builder()
+                .profileName(App.profileName)
+                .build()) {
+            kitsLogGroups = CloudWatch.getLogGroups(App.region, profileCredentialsProvider, logGroupsPattern);
+            for (KitsLogGroup log : kitsLogGroups) {
+                logGroupsModel.addElement(log.logGroupName() + " " + log.creationTime());
+            }
+        }
     }
 
     private static JPanel createStreamPanel(DefaultListModel<String> logStreamsModel, DefaultListModel<EventRow> logModel) {
@@ -128,10 +148,10 @@ public class Gui {
                 for (KitsLogEvent stream : logStreams) {
                     int colorIndex = 0;
                     String message = stream.content() + " " + stream.eventTime();
-                    if (message.contains("ERROR")) {
+                    if (message.contains(color1)) {
                         colorIndex = 1;
                     }
-                    if (message.contains("INFO")) {
+                    if (message.contains(color2)) {
                         colorIndex = 2;
                     }
                     logModel.addElement(new EventRow(message, colorIndex));
