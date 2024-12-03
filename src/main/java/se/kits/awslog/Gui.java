@@ -1,10 +1,14 @@
 package se.kits.awslog;
 
+import se.kits.awslog.eventstore.EventLogger;
 import software.amazon.awssdk.auth.credentials.ProfileCredentialsProvider;
+import software.amazon.awssdk.services.cloudwatchlogs.CloudWatchLogsClient;
 
 import javax.swing.*;
 import java.awt.*;
 import java.util.List;
+
+import static se.kits.awslog.App.profileName;
 
 public class Gui {
 
@@ -13,6 +17,7 @@ public class Gui {
     private static List<KitsLogGroup> kitsLogGroups;
     private static List<KitsLogStream> kitsLogStreams;
     private static String logGroupsPattern = "";
+    private static String selectedLogGroup = null;
 
     public static void startGui() {
         SwingUtilities.invokeLater(() -> {
@@ -25,17 +30,22 @@ public class Gui {
             DefaultListModel<String> logStreamsModel = new DefaultListModel<>();
             logStreamsModel.addElement("Select log group");
             DefaultListModel<EventRow> logModel = new DefaultListModel<>();
+            DefaultListModel<EventRow> tailModel = new DefaultListModel<>();
             logModel.addElement(new EventRow("Select log stream", 1));
 
             DefaultListModel<String> logGroupsModel = new DefaultListModel<>();
             JPanel groupPanel = createGroupPanel(logGroupsModel, logStreamsModel);
             JPanel streamPanel = createStreamPanel(logStreamsModel, logModel);
             JPanel logPanel = createLogPanel(logModel);
+            JPanel tailPanel = createTailPanel(tailModel);
 
             JSplitPane topSplitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, groupPanel, streamPanel);
             topSplitPane.setOneTouchExpandable(true);
             topSplitPane.setDividerLocation(200);
-            JSplitPane mainSplitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, topSplitPane, logPanel);
+            JSplitPane bottomSplitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, logPanel, tailPanel);
+            topSplitPane.setOneTouchExpandable(true);
+            topSplitPane.setDividerLocation(200);
+            JSplitPane mainSplitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, topSplitPane, bottomSplitPane);
             topSplitPane.setOneTouchExpandable(true);
             topSplitPane.setDividerLocation(200);
 
@@ -61,6 +71,10 @@ public class Gui {
             JButton color2Button = new JButton("Color 2 pattern");
             buttonPanel.add(color2Button);
             color2Button.addActionListener(e -> color2 = inputField.getText().trim());
+
+            JButton tailButton = new JButton("Tail");
+            buttonPanel.add(tailButton);
+            tailButton.addActionListener(e -> new TailWorker(kitsLogStreams, selectedLogGroup, tailModel));
 
             GridBagConstraints gbc = new GridBagConstraints();
 
@@ -102,12 +116,17 @@ public class Gui {
         logGroups.setAlignmentY(Component.CENTER_ALIGNMENT);
         fetchLogGroups(logGroupsModel);
         logGroups.addListSelectionListener(e -> {
-            String key = kitsLogGroups.get(e.getFirstIndex()).logGroupName();
+            selectedLogGroup = kitsLogGroups.get(e.getFirstIndex()).logGroupName();
             logStreamsModel.clear();
-            try (ProfileCredentialsProvider profileCredentialsProvider = ProfileCredentialsProvider.builder()
-                    .profileName(App.profileName)
-                    .build()) {
-                kitsLogStreams = CloudWatch.getLogStreams(App.region, profileCredentialsProvider, key);
+            try (
+                    ProfileCredentialsProvider profileCredentialsProvider = ProfileCredentialsProvider.builder()
+                            .profileName(profileName)
+                            .build();
+                    CloudWatchLogsClient client = CloudWatchLogsClient.builder()
+                            .region(App.region)
+                            .credentialsProvider(profileCredentialsProvider)
+                            .build()) {
+                kitsLogStreams = CloudWatch.getLogStreams(client, selectedLogGroup);
                 for (KitsLogStream stream : kitsLogStreams) {
                     logStreamsModel.addElement(stream.logStreamName() + " " + stream.lastEventTime());
                 }
@@ -120,7 +139,7 @@ public class Gui {
 
     private static void fetchLogGroups(DefaultListModel<String> logGroupsModel) {
         try (ProfileCredentialsProvider profileCredentialsProvider = ProfileCredentialsProvider.builder()
-                .profileName(App.profileName)
+                .profileName(profileName)
                 .build()) {
             kitsLogGroups = CloudWatch.getLogGroups(App.region, profileCredentialsProvider, logGroupsPattern);
             for (KitsLogGroup log : kitsLogGroups) {
@@ -142,11 +161,12 @@ public class Gui {
             KitsLogStream key = kitsLogStreams.get(e.getFirstIndex());
             logModel.clear();
             try (ProfileCredentialsProvider profileCredentialsProvider = ProfileCredentialsProvider.builder()
-                    .profileName(App.profileName)
+                    .profileName(profileName)
                     .build()) {
                 List<KitsLogEvent> logStreams = CloudWatch.getLogEvents(App.region, profileCredentialsProvider, key);
                 for (KitsLogEvent stream : logStreams) {
                     int colorIndex = 0;
+                    EventLogger.logEvent(new KitsLogEvent(stream.content(), stream.eventTime()));
                     String message = stream.content() + " " + stream.eventTime();
                     if (message.contains(color1)) {
                         colorIndex = 1;
@@ -159,6 +179,19 @@ public class Gui {
             }
         });
         return streamsArea;
+    }
+
+    private static JPanel createTailPanel(DefaultListModel<EventRow> tailModel) {
+        JPanel tailPanel = new JPanel();
+        JList<EventRow> logs = new JList<>(tailModel);
+        logs.setCellRenderer(new LogCellRenderer());
+        JScrollPane logScrollPane = new JScrollPane(logs);
+        tailPanel.add(logScrollPane);
+        tailPanel.setLayout(new BoxLayout(tailPanel, BoxLayout.Y_AXIS));
+        tailPanel.setBackground(Color.GREEN);
+        logs.setAlignmentX(Component.CENTER_ALIGNMENT);
+        logs.setAlignmentY(Component.CENTER_ALIGNMENT);
+        return tailPanel;
     }
 
     private static JPanel createLogPanel(DefaultListModel<EventRow> logModel) {

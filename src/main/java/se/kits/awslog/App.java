@@ -3,6 +3,7 @@ package se.kits.awslog;
 import org.slf4j.Logger;
 import software.amazon.awssdk.auth.credentials.ProfileCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.cloudwatchlogs.CloudWatchLogsClient;
 
 import javax.swing.*;
 import java.time.format.DateTimeFormatter;
@@ -21,13 +22,7 @@ public class App
     public static void main( String[] args ) {
         // Set the native look and feel
         try {
-//            UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
-            for (UIManager.LookAndFeelInfo info : UIManager.getInstalledLookAndFeels()) {
-                if ("Nimbus".equals(info.getName())) {
-                    UIManager.setLookAndFeel(info.getClassName());
-                    break;
-                }
-            }
+            UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
         } catch (Exception e) {
             logger.info(e.getMessage());
         }
@@ -38,15 +33,20 @@ public class App
 
         Gui.startGui();
         // Create a ProfileCredentialsProvider with the specified profile
-        try (ProfileCredentialsProvider profileCredentialsProvider = ProfileCredentialsProvider.builder()
-                .profileName(profileName)
-                .build()) {
-          CloudWatch.tailLatest(region, profileCredentialsProvider, "/aws/lambda/Konpro-AuditLoggerD252FC81-05YD2GBS78C0");
-//            CloudWatch.getLogGroups(region, profileCredentialsProvider, "Konpro-Audit");
-        } catch (software.amazon.awssdk.core.exception.SdkClientException e) {
-            logger.error("SSO login maybe? {}", e.getMessage());
-            System.exit(-1);
-        }
+//        try (ProfileCredentialsProvider profileCredentialsProvider = ProfileCredentialsProvider.builder()
+//                .profileName(profileName)
+//                .build();
+//             CloudWatchLogsClient client = CloudWatchLogsClient.builder()
+//                .region(region)
+//                .credentialsProvider(profileCredentialsProvider)
+//                .build()
+//        ) {
+//          CloudWatch.tailLatest(client, "/aws/lambda/Konpro-AuditLoggerD252FC81-05YD2GBS78C0");
+////            CloudWatch.getLogGroups(region, profileCredentialsProvider, "Konpro-Audit");
+//        } catch (software.amazon.awssdk.core.exception.SdkClientException e) {
+//            logger.error("SSO login maybe? {}", e.getMessage());
+//            System.exit(-1);
+//        }
     }
 
 }
